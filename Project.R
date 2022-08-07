@@ -3,7 +3,7 @@
 
 # source data comes from:  http://groupware.les.inf.puc-rio.br/har
 
-# Goall: to predict the manner in which particiapnts did the exercise
+# Goal: to predict the manner in which particiapnts did the exercise
 
 # classe variable in the training set represents the manner
 
@@ -97,7 +97,7 @@ sum(is.na(newtest))
 
 #removing nerozerovariance variables from the dataset if any of them exists
 
-nzv = nearZeroVar(newtrain[,-53], saveMetrics = TRUE)
+nzv = nearZeroVar(newtrain[,-53], freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE, allowParallel = TRUE)
 nzv
 
 # since none of the variables has nzv true, we are including all of the variables in our model
@@ -109,6 +109,11 @@ par(mar=c(1,1,1,1))
 
 Hmisc::hist.data.frame(newtrain[-53])
 # dividing the training set into validation set, sub-training set and testing set
+
+x= newtrain[-53]
+x = scale(x, center=TRUE, scale = TRUE)
+
+Hmisc::hist.data.frame(x)
 
 inBuild = createDataPartition(y = newtrain$classe, p = 0.75, list = FALSE)
 
@@ -182,7 +187,7 @@ print(tuned_model)
 # on the x-axis and the out-of-bag estimated error on the y-axis
 
 # We can see that the lowest OOB error is achieved by using 7 randomly chosen predictors
-# at each split when building the trees which is default in function aboce.
+# at each split when building the trees which is default in function above.
 
 prediction2 = predict(modelFit2, testing)
 cmrandomforest = confusionMatrix(prediction2, factor(testing$classe))
@@ -235,7 +240,7 @@ confusionMatrix(prediction3, testing$classe)$overall[1]
 confusionMatrix(prediction4, testing$classe)$overall[1]
 confusionMatrix(predictionComb, testing$classe)$overall[1]
 
-# we can see that combined has much less error
+# We can see that combined has much less error
 
 # Prediction on validation data set
 pred1v = predict(modelFit1, validation);
@@ -263,7 +268,8 @@ accuracy <- round(c( cmdecisiontreev, cmrandomforestv,
 oos_error <- 1 - accuracy #out of sample error
 
 data.frame(accuracy = accuracy, oos_error = oos_error, row.names = models)
-# plotting the models
+
+# Plotting the models
 
 library(ggplot2)
 par(mfrow=c(1,1))
@@ -272,8 +278,10 @@ plot(modelFit2)
 ggplot(modelFit3) + theme_bw()
 
 
-# prediction on testing dataset
+# Prediction on testing dataset
 predc = predict(modelFit2, newtest)
 predc
 
+
+getwd()
 

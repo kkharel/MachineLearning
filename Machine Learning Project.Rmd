@@ -15,10 +15,14 @@ The data has been collected from accelerometers in devices like Jawbone Up, Nike
 which are mounted on the belt, forearm, arm and dumbell of 6 participants that were performing
 barbell lifts correctly and incorrectly in 5 different ways.
 
-Our goal of this project is to retrieve the data, pre-process the data and train a model 
-to predict the manner in which participants did the exercise that is in which of the 5 ways
+Our goal of this project is to retrieve the data, explore the data, pre-process the data for standardization/scaling if needed and train a model 
+to predict the manner in which participants did the exercise that is; in which of the 5 ways
 a barbell lift was performed. The classe variable in the data represents the 5 ways in which
 participants lifted barbell
+
+The objective is to understand the manner in which participants did the exercise. For example, to lost weight; we keep track of how much calories we eat, how much we burn ,how much we 
+burn by doing different workouts. There are several machines at the gym and we exercise on them. We try to quantify all of this activities but we never try to quantify how well we are 
+doing it. How well we use those machines can be quantified using various techniques mentioned below.
 
 The source data for this project comes from source: [Repository](http://groupware.les.inf.puc-rio.br/har)
 
@@ -26,27 +30,47 @@ The training set comes from source: [training](https://d396qusza40orc.cloudfront
 
 The testing set comes from source: [testing](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
 
-The dataset has been downloaded and saved in a local computer in working directory but
-we can also directly import the data using url.
+The dataset has been downloaded and saved in a local computer in working directory but we can also directly import the data using url.
 
 
-```{r packages, echo = FALSE}
+```{r loading-packages, echo = FALSE, warning=FALSE, message=FALSE}
 library(caret); library(kernlab);library(randomForest);library(dplyr);library(tidyverse);library(Hmisc);library(ggplot2);library(randomForest)
 ```
 
-Step - 1: Loading the data
-```{r}
+Step - 1: Loading the data and taking the peek at the dimension of training and testing set.
+```{r reading-data}
 traincsv = read.csv("C:\\Users\\kkhar\\OneDrive\\Documents\\Practical Machine Learning\\pml-training.csv")
 testcsv = read.csv("C:\\Users\\kkhar\\OneDrive\\Documents\\Practical Machine Learning\\pml-testing.csv")
 
-# looking at the dimension  of the traincsv and testcsv
-
 dim(traincsv); dim(testcsv)
 ```
+Step - 2: Pre-processing the data. This is a very critical step in machine learning because our models learn from the data that gets feed into it which affects the model ability to learn. We need to keep in mind
+to handle Null Values, Imputation methods, standardization, how to handle ordinal and nominal factor variables, concept of One-Hot Encoding, Multi-Collinearity and its impact
 
-Step - 2: Pre-processing the data
+To handle null values, the simple way is to drop rows and columns that contain null values. It is not always wise to drop all rows and columns that contains null values since it can result in information loss.
+This is where the second techniques comes in play.
 
-```{r}
+Imputation is simply the process of substituting null values by using methods like Mean Imputation, Cold deck imputation, Regression imputation etc.
+
+Standardization is the process of transforming/scaling the data such that the mean of values is zero and standard deviation is one. The formula for standardization is given below:
+
+$$
+z = \frac {x_i - \mu}{\sigma}
+$$
+where $x_i$ is the data point and $/mu$ is the mean and $\sigma$ is the standard deviation. The scale function achieves this goal in the model.
+
+
+When it comes to pre-processing ordinal and nominal categorical variables, we need to treat them differently. Note that R does not use the terms nominal, ordinal and interval/ratio for types of variables.
+To transform ordinal categorical variables, we can use the factor function which allows us to assign 
+an order to the nominal variables thus making it ordinal variables. We need to set the order of the parameter to TRUE and assigning a vector with the desired level of hierarchy the the argument levels.
+
+One-Hot encoding simply means that we create 'n' columns where n is the number of unique values that the factor variable can take. Note that one-hot encoding results in multi-collinearity issues.
+
+Multi-collinearity occurs when variables are strongly dependent on each other which can impact our model. We won't be able to use the weight vector to calculate the variable importance. To check for 
+multi-collinearity, we plot the variables in every possible pairs (corr plot) and see the relationship between them. If they have linear relationship then variables are strongly correlated with each other and thus multi-collinearity issue. To correct this issue, we can simply drop the variables or use techniques like ridge regression or PCA or least squares regression. Simple way is to drop the variables which have VIF greater than 10.
+
+
+```{r preprocessing-data, message=FALSE, warning=FALSE}
 # removing non-numeric variables from training set
 traincsv = subset(traincsv, select = -c(X,raw_timestamp_part_1,raw_timestamp_part_2, cvtd_timestamp, new_window, num_window, user_name))
 
@@ -57,13 +81,12 @@ testcsv = subset(testcsv, select = -c(X,raw_timestamp_part_1,raw_timestamp_part_
 # creating a vector with all of the column classes from train set
 
 columnClasses <- sapply(traincsv,class)
-columnClasses
+
 grep("classe", colnames(traincsv)) # getting the column number of classe variable
 
 
 # creating a vector with all of the column classes from test set
 columnClassestest = sapply(testcsv, class)
-columnClassestest
 
 # converting all data columns to numeric except classe variable in training set
 
@@ -71,14 +94,14 @@ for(i in 1:152){
   if(columnClasses[i] != "numeric"){
     if(columnClasses[i] == "factor"){
       traincsv <- traincsv[,ifelse(NAcount == 0, TRUE, FALSE)]
-      traincsv[traincsv[,i] == "",i] <- NA
+      traincsv[traincsv[,i] == "",i] <- NA # if there is an null record then fill it up with NA
       traincsv[,i] <- as.numeric(as.character(traincsv[,i]))
     }
     traincsv[,i] <- as.numeric(traincsv[,i])
   }
 }
 
-# converting all data columns to numeric from testing set
+# converting all data columns to numeric in testing set
 for(i in 1:152){
   if(columnClassestest[i] != "numeric"){
     if(columnClassestest[i] == "factor"){
@@ -90,6 +113,10 @@ for(i in 1:152){
   }
 }
 
+```
+
+Lets count the number of NA values in training and testing set.
+```{r}
 # total number of NA values in training set
 library(dplyr)
 traincsv %>%
@@ -98,12 +125,11 @@ traincsv %>%
 # total number of NA values in testing set
 testcsv %>%
   summarise(count = sum(is.na(testcsv)))
-
 ```
 
-```{r}
-# remove all rows and columns with more than 80% NA in train set
-# come back to this later (dropping only columns or rows too)
+Removing all rows and columns with more than 80% NA in train set
+
+```{r removingNAs}
 #newtrain = traincsv[which(rowMeans(!is.na(traincsv)) > 0.80), which(colMeans(!is.na(traincsv)) > 0.80)]
 newtrain = traincsv[, which(colMeans(!is.na(traincsv)) > 0.80)]
 
@@ -111,12 +137,8 @@ newtrain = traincsv[, which(colMeans(!is.na(traincsv)) > 0.80)]
 newtest = testcsv[, which(colMeans(!is.na(testcsv)) > 0.80)]
 ```
 
-```{r}
-as.factor(newtrain$classe)
-```
 
-
-```{r}
+```{r checkingNAs}
 # checking if NA's are present in the training dataset
 sum(is.na(newtrain))
 
@@ -125,15 +147,23 @@ sum(is.na(newtest))
 ```
 
 
-```{r}
+Near zero variance function is used below to identify variables that have little or no variance. We do not include them in the model since it adds very little value to the algorithm. These are the variables with very few unique values relative to the number of samples and the ratio of frequency of the most common value to the frequency of the second most common value is large.
+
+```{r nearZeroVar}
 #removing nerozerovariance variables from the dataset if any of them exists
-nzv = nearZeroVar(newtrain[,-53], saveMetrics = TRUE)
+nzv = nearZeroVar(newtrain[,-53], freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE, allowParallel = TRUE)
+# freqCut = cutoff for the ratio of the most common value to the second most common value
+# uniqueCut = cutoff for the percentage of distinct values out of the number of total samples
 nzv
 
-# since none of the variables has nzv true, we are including all of the variables in our model
 ```
 
-```{r}
+Since none of the variables has nzv true, we are including all of the variables in our model.
+
+Step 3: Checking the distribution of the data
+
+Lets plot the histogram of all of the independent variables to see how the data in each of them is being distributed.
+```{r DistributionofData}
 # looking at the histogram of data
 library(Hmisc)
 
@@ -142,7 +172,10 @@ par(mar=c(1,1,1,1))
 Hmisc::hist.data.frame(newtrain[-53])
 ```
 
-```{r}
+Step 4: Partitioning the dataset
+
+```{r partitioningData}
+
 # dividing the training set into validation set, sub-training set and testing set
 
 inBuild = createDataPartition(y = newtrain$classe, p = 0.75, list = FALSE)
@@ -155,66 +188,66 @@ testing = buildData[-inTrain, ]
 
 ```
 
-```{r}
-# standardizing the data in training
+Step 5: Creating the model, Training the model, Testing the Model and Validating the Model
+
+First Model: Decision Tree
+  Decision Tree creates classification or regression models in tree structure. It breaks down a dataset into smaller subsets with increasing depth of tree with leaf and decision nodes. The        decision node has two or more branches and leaf node represents a classification or decision. The root node corresponds to the top-most node in a tree which is the best predictor. Selecting the   top-most node is out of the scope here. Note: Decision trees can handle categorical and numerical data. 
+
+```{r DecisionTree}
 modelFit1 = train(classe~., data = training,
                  preProcess = c("center", "scale"), method = "rpart",
                  trControl = trainControl(method="cv", number=3, verboseIter=F), tuneLength = 4) # setting up control for training to use 3-fold cross validation
 
-
+# Note: Standardization within the training process.
 ```
 
-```{r}
+
+
+```{r plottingTree}
 par(mfrow=c(1,1))
 
 # Plotting decision tree
 rpart.plot::rpart.plot(modelFit1$finalModel, cex = 0.5, type = 4, under = TRUE)
 ```
-```{r}
+```{r Prediction}
 prediction1 = predict(modelFit1, testing)
 cmdecisiontree <- confusionMatrix(prediction1, factor(testing$classe))
 cmdecisiontree
 ```
-From the results above, decision tree is not able to accurately classify the classe. The accuracy rate is around 53%. The model was able to classify classe A pretty well but not others.
+In the decision tree plot, we start at the root node (depth 0):
+  At the top, it is the overall probability of participants that are in A. 28% from classe A are classified as A (this is also a prevalance in statistics summary), 19% from B are classified as    A, 17% from C are classified as A, 16% from D are classified as A and 18% are classified as A. The node asks whether roll belt is less than 1.1 or not. If yes, then we go down to the root's     left child node. Further, the node asks if pitch forearm is less than -1.6. If yes, it classifies the classe as A. We keep on going to understand what impacts the likelihood of falling into     one of the given classe.
 
+From the results above, decision tree is not able to accurately classify the classe. The accuracy rate is around 53%. The model was able to classify classe A pretty well but not others.
 We can try to fit a different model and see how it performs. 
 
+Second model: Random Forest
+  Random Forest is the ensemble of decision trees. It combines multiple decision trees to get more accurate predictions. Random forest choses the predictors at random and takes the outputs of     multiple trees to make a decision. Think about decision trees and random forests as individual work and group work. 
 
-```{r}
+```{r randomForest}
 # random forest
 library(randomForest)
-modelFit2 = train(classe~., data = training,
-                         preProcess = c("center","scale"),
-                         methods = "rf",
-                         trControl = trainControl(method="cv", number=3, verboseIter=F),  # setting up control for training to use 3-fold cross validation
-                                       importance = TRUE, proximity = TRUE
+modelFit2 = randomForest(as.factor(training$classe)~., data = training, ntree=10, importance = T
+                         # preProcess = c("center","scale"),
+                         # methods = "rf",
+                         # trControl = trainControl(method="cv", number=3, verboseIter=F),  # setting up control for training to use 3-fold cross validation
+                                       # importance = TRUE, proximity = TRUE
                                        )
 modelFit2
 #getTree(modelFit2, k = 4)
 ```
+We can see from training the random forest model, there are 10 trees and number of variables tried at each split is seven. From the confusion matrix, we can see that 3026 were 
+correctly identified as A which is indeed A. 77 are classified as A but are B and so on. 
+
 ```{r}
 plot(modelFit2)
 ```
 
-
-Variance importance plot helps us identify which predictor varibales are important in the final model. 
-
-```{r}
-varImpPlot(modelFit2,
-           type=NULL, class=NULL, scale=TRUE,
-           main=deparse(substitute(modelFit2)))
-
-```
-
-The x-axis displays the average increase in node purity of the regression trees
-based on splitting on the various predictors displayed on the y-axis. From the plot we can see that yaw_belt is the most important predictor variable,
-followed closely by roll_belt.
-
+From the model fit plot, we can sse that as the number of trees increases, the error decreases
 
 We can also tune the model and make it more accurate by tweaking various hyper parameters.
 One simple example of hyperparameter tuning is below.
 
-```{r}
+```{r modeltuning}
 # tuning the model
 
 # ntreeTry: The number of trees to build.
@@ -227,7 +260,7 @@ One simple example of hyperparameter tuning is below.
 # hyper parameter tuning
 tuned_model = tuneRF(
   x= training[,-53], #define predictor variables
-  y=training$classe, #define response variable
+  y=as.factor(training$classe), #define response variable
   ntreeTry=500,
   stepFactor=1.5,
   improve=0.01,
@@ -236,18 +269,33 @@ print(tuned_model)
 
 ```
 
-We can see the number of predictors used at each split when building the trees
-on the x-axis and the out-of-bag estimated error on the y-axis. The lowest OOB error is achieved by using 7 randomly chosen predictoras at each split when building the trees which is default in the function above.
+We can see the number of predictors used at each split when building the trees on the x-axis and the out-of-bag estimated error on the y-axis. 
+The lowest OOB error is achieved by using 10 randomly chosen predictor at each split when building the trees which is default in the function above.
 
-
-```{r}
+```{r predictionRF}
 prediction2 = predict(modelFit2, testing)
 cmrandomforest = confusionMatrix(prediction2, factor(testing$classe))
 cmrandomforest
 ```
 
+From the Confusion Matrix and Statistics summary above, we can see that random forest predicted 1043 records as A which were indeed A. It was able to accurately identify the classe 98.69%.
 
-```{r}
+Variance importance plot helps us identify which predictor variables are important in the final model aka checking for distributional assumptions. The presence of variance in data set is important because it allows the model to learn about different patterns hidden in the data. Also, it must not have high variance because then we will be over-fitting the model. We need a balance between these two. Also refer to bias-variance trade-off to learn more.
+
+```{r VarImpPlot}
+varImpPlot(modelFit2,
+           type=NULL, class=NULL, scale=TRUE,
+           main=deparse(substitute(modelFit2)))
+
+```
+
+The x-axis displays the average increase in node purity of the regression trees based on splitting on the various predictors displayed on the y-axis. From the plot we can see that yaw_belt and roll_belt are the most important predictor variable,
+
+
+Third Model: Gradient Boosting 
+  This is one of the leading methods to win Kaggle competitions. On one hand, random forest builds ensemble of independent trees whereas on the other hand, GBM builds ensemble of shallow and      weak successive trees with each tree learning and improving on the previous. When we combine these weak trees, it can often produce hard to beat predictions than other algorithms can. Gradient   boosting is considered gradient descent algorithm which is an optimization algorithm capable of finding optimal solutions to a given problem. The general idea is to tweak the parameters         iteratively to minimize the cost function. The problem is that not all cost functions are convex, we might get stuck in local minima which can make finding global minima difficult.
+
+```{r GradientBoosting}
 # Gradient Boosted Trees
 
 modelFit3 = train(classe~., method = "gbm", data = training,
@@ -257,11 +305,17 @@ modelFit3 = train(classe~., method = "gbm", data = training,
 plot(modelFit3)
 prediction3 = predict(modelFit3, testing)
 
-cmboostingtrees = confusionMatrix(prediction3, testing$classe)
+cmboostingtrees = confusionMatrix(prediction3, as.factor(testing$classe))
 cmboostingtrees
 ```
 
-```{r}
+We can see from the results above, gradient boosting was not a great choice against random forest but it is better than decision trees.The accuracy is 95.68%
+
+
+Fourth Model: Support Vector Machines
+  SVM is widely used in classification problems. SVM creates a decision boundary which best separates the given data points. The best hyperplane is the one whose distance to the nearest element   of each tag is the largest. Each data item is plotted as a point in n-dimensional space where n is the number of independent variables with the value of each independent variables being the     value in particular coordinate. SVM can efficiently perform a non-linear classification, by implicitly mapping the inputs into high-dimensional variable spaces.
+
+```{r SVM}
 # Support Vector Machine
 
 modelFit4 = train(classe~., method = "svmLinear",
@@ -276,14 +330,17 @@ cmsupportvector = confusionMatrix(prediction4, factor(testing$classe))
 cmsupportvector
 ```
 
+From the results above, SVM performed worse than randomforest and gradient boosted trees but still better than decision tree. The accuracy is only 77.98%
+
+Let's combine two worst performing model and create a new model out of that to see whether it performs better than all of the model we have trained so far.
 
 Ensemble Method (combining two methods that have low accuracy, model stacking). In our model,
 we are stacking the predictions together using random forests and setting up control for 
 training to use 3-fold cross-validation.
 
-```{r}
-comb = data.frame(prediction1, prediction2,prediction3, prediction4, classe = testing$classe)
-modelComb = randomForest(classe~., data = comb,
+```{r EmsembleMethod}
+comb = data.frame(prediction3, prediction4, classe = as.factor(testing$classe))
+modelComb = randomForest(as.factor(comb$classe)~., data = comb,
                          preProcess = c("center,scale"),
                          trControl = trainControl(method="cv", number=3, verboseIter=F), 
                          importance = TRUE, proximity = TRUE)
@@ -294,20 +351,23 @@ cmensemble = confusionMatrix(predictionComb, comb$classe)
 cmensemble
 ```
 
-```{r}
+
+Let us check the accuracy of each model in the test set.
+```{r Accuracy}
 # What is the resulting accuracy on the test set?
 # Is it better or worse than each of the individual predictions?
 
-confusionMatrix(prediction1, testing$classe)$overall[1]
-confusionMatrix(prediction2, testing$classe)$overall[1]
-confusionMatrix(prediction3, testing$classe)$overall[1]
-confusionMatrix(prediction4, testing$classe)$overall[1]
-confusionMatrix(predictionComb, testing$classe)$overall[1]
-
-# we can see that combined has much less error
+confusionMatrix(prediction1, as.factor(testing$classe))$overall[1]
+confusionMatrix(prediction2, as.factor(testing$classe))$overall[1]
+confusionMatrix(prediction3, as.factor(testing$classe))$overall[1]
+confusionMatrix(prediction4, as.factor(testing$classe))$overall[1]
+confusionMatrix(predictionComb, as.factor(testing$classe))$overall[1]
 ```
 
-```{r}
+We can see from the results above that the combined method has much less error. 
+
+
+```{r ValidationPred}
 # Prediction on validation data set
 pred1v = predict(modelFit1, validation);
 pred2v = predict(modelFit2, validation);
@@ -320,13 +380,14 @@ predvdf = data.frame(prediction1 = pred1v, prediction2 = pred2v,
 combpredv = predict(modelComb,predvdf)
 ```
 
-```{r}
+
+```{r EvaluationPred}
 # Evaluate on Validation
-cmdecisiontreev = confusionMatrix(pred1v, factor(validation$classe))$overall[1]
-cmrandomforestv = confusionMatrix(pred2v, factor(validation$classe))$overall[1]
-cmboostingtreev = confusionMatrix(pred3v, factor(validation$classe))$overall[1]
-cmsupportvectorv = confusionMatrix(pred4v, factor(validation$classe))$overall[1]
-cmensemblev = confusionMatrix(combpredv, validation$classe)$overall[1]
+cmdecisiontreev = confusionMatrix(pred1v, as.factor(validation$classe))$overall[1]
+cmrandomforestv = confusionMatrix(pred2v, as.factor(validation$classe))$overall[1]
+cmboostingtreev = confusionMatrix(pred3v, as.factor(validation$classe))$overall[1]
+cmsupportvectorv = confusionMatrix(pred4v, as.factor(validation$classe))$overall[1]
+cmensemblev = confusionMatrix(combpredv, as.factor(validation$classe))$overall[1]
 
 models <- c("Tree", "RF", "GBM", "SVM", "Ensemble")
 accuracy <- round(c( cmdecisiontreev, cmrandomforestv,
@@ -338,7 +399,8 @@ oos_error <- 1 - accuracy #out of sample error
 data.frame(accuracy = accuracy, oos_error = oos_error, row.names = models)
 ```
 
-```{r}
+
+```{r modelPlots}
 # plotting the models
 
 library(ggplot2)
@@ -349,11 +411,11 @@ ggplot(modelFit3) + theme_bw()
 
 ```
 
-```{r}
+
+```{r TestingPred}
 # prediction on testing dataset
 predc = predict(modelFit2, newtest)
 predc
-
 
 ```
 
