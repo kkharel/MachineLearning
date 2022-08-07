@@ -2,6 +2,7 @@
 title: "Machine Learning Project"
 author: "Kushal Kharel"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -190,7 +191,7 @@ testing = buildData[-inTrain, ]
 
 Step 5: Creating the model, Training the model, Testing the Model and Validating the Model
 
-First Model: Decision Tree
+First Model: Decision Trees:
   Decision Tree creates classification or regression models in tree structure. It breaks down a dataset into smaller subsets with increasing depth of tree with leaf and decision nodes. The        decision node has two or more branches and leaf node represents a classification or decision. The root node corresponds to the top-most node in a tree which is the best predictor. Selecting the   top-most node is out of the scope here. Note: Decision trees can handle categorical and numerical data. 
 
 ```{r DecisionTree}
@@ -215,13 +216,14 @@ cmdecisiontree <- confusionMatrix(prediction1, factor(testing$classe))
 cmdecisiontree
 ```
 In the decision tree plot, we start at the root node (depth 0):
-  At the top, it is the overall probability of participants that are in A. 28% from classe A are classified as A (this is also a prevalance in statistics summary), 19% from B are classified as    A, 17% from C are classified as A, 16% from D are classified as A and 18% are classified as A. The node asks whether roll belt is less than 1.1 or not. If yes, then we go down to the root's     left child node. Further, the node asks if pitch forearm is less than -1.6. If yes, it classifies the classe as A. We keep on going to understand what impacts the likelihood of falling into     one of the given classe.
+  At the top, it is the overall probability of participants that are in A. 28% from classe A are classified as A (this is also a prevalance in statistics summary), 19% from B are classified as    A, 17% from C are classified as A, 16% from D are classified as A and 18% from E are classified as A. The node asks whether roll belt is less than 1.1 or not. If yes, then we go down to the root's     left child node. Further, the node asks if pitch forearm is less than -1.6. If yes, it classifies the classe as A. We keep on going to understand what impacts the likelihood of falling into     one of the given classe.
 
-From the results above, decision tree is not able to accurately classify the classe. The accuracy rate is around 53%. The model was able to classify classe A pretty well but not others.
+From the results above, decision tree is not able to accurately classify the classe. The accuracy rate is around 53%, it can change everytime we run the model but should be close to this number.
+The model was able to classify classe A pretty well but not others.
 We can try to fit a different model and see how it performs. 
 
-Second model: Random Forest
-  Random Forest is the ensemble of decision trees. It combines multiple decision trees to get more accurate predictions. Random forest choses the predictors at random and takes the outputs of     multiple trees to make a decision. Think about decision trees and random forests as individual work and group work. 
+Second model: Random Forest: 
+  Random Forest is the ensemble of decision trees. It combines multiple decision trees to get more accurate predictions. Random forest chooses the predictors at random and takes the outputs of     multiple trees to make a decision. Think about decision trees and random forests as individual work and group work. 
 
 ```{r randomForest}
 # random forest
@@ -238,11 +240,11 @@ modelFit2
 We can see from training the random forest model, there are 10 trees and number of variables tried at each split is seven. From the confusion matrix, we can see that 3026 were 
 correctly identified as A which is indeed A. 77 are classified as A but are B and so on. 
 
-```{r}
+```{r randomForestPlot}
 plot(modelFit2)
 ```
 
-From the model fit plot, we can sse that as the number of trees increases, the error decreases
+From the model fit plot, we can see that as the number of trees increases, the error decreases
 
 We can also tune the model and make it more accurate by tweaking various hyper parameters.
 One simple example of hyperparameter tuning is below.
@@ -270,7 +272,7 @@ print(tuned_model)
 ```
 
 We can see the number of predictors used at each split when building the trees on the x-axis and the out-of-bag estimated error on the y-axis. 
-The lowest OOB error is achieved by using 10 randomly chosen predictor at each split when building the trees which is default in the function above.
+The lowest OOB error is achieved by using 7 randomly chosen predictor at each split when building the trees which is default in the function above.
 
 ```{r predictionRF}
 prediction2 = predict(modelFit2, testing)
@@ -292,7 +294,7 @@ varImpPlot(modelFit2,
 The x-axis displays the average increase in node purity of the regression trees based on splitting on the various predictors displayed on the y-axis. From the plot we can see that yaw_belt and roll_belt are the most important predictor variable,
 
 
-Third Model: Gradient Boosting 
+Third Model: Gradient Boosting:
   This is one of the leading methods to win Kaggle competitions. On one hand, random forest builds ensemble of independent trees whereas on the other hand, GBM builds ensemble of shallow and      weak successive trees with each tree learning and improving on the previous. When we combine these weak trees, it can often produce hard to beat predictions than other algorithms can. Gradient   boosting is considered gradient descent algorithm which is an optimization algorithm capable of finding optimal solutions to a given problem. The general idea is to tweak the parameters         iteratively to minimize the cost function. The problem is that not all cost functions are convex, we might get stuck in local minima which can make finding global minima difficult.
 
 ```{r GradientBoosting}
@@ -312,7 +314,7 @@ cmboostingtrees
 We can see from the results above, gradient boosting was not a great choice against random forest but it is better than decision trees.The accuracy is 95.68%
 
 
-Fourth Model: Support Vector Machines
+Fourth Model: Support Vector Machines: 
   SVM is widely used in classification problems. SVM creates a decision boundary which best separates the given data points. The best hyperplane is the one whose distance to the nearest element   of each tag is the largest. Each data item is plotted as a point in n-dimensional space where n is the number of independent variables with the value of each independent variables being the     value in particular coordinate. SVM can efficiently perform a non-linear classification, by implicitly mapping the inputs into high-dimensional variable spaces.
 
 ```{r SVM}
@@ -330,16 +332,16 @@ cmsupportvector = confusionMatrix(prediction4, factor(testing$classe))
 cmsupportvector
 ```
 
-From the results above, SVM performed worse than randomforest and gradient boosted trees but still better than decision tree. The accuracy is only 77.98%
+From the results above, SVM performed worse than random forest and gradient boosted trees but still better than decision tree. The accuracy is only 77.98%
 
-Let's combine two worst performing model and create a new model out of that to see whether it performs better than all of the model we have trained so far.
+Let's combine two worst performing model and create a new model to see whether it performs better than all of the model we have trained so far.
 
 Ensemble Method (combining two methods that have low accuracy, model stacking). In our model,
 we are stacking the predictions together using random forests and setting up control for 
 training to use 3-fold cross-validation.
 
 ```{r EmsembleMethod}
-comb = data.frame(prediction3, prediction4, classe = as.factor(testing$classe))
+comb = data.frame(prediction1, prediction4, classe = as.factor(testing$classe))
 modelComb = randomForest(as.factor(comb$classe)~., data = comb,
                          preProcess = c("center,scale"),
                          trControl = trainControl(method="cv", number=3, verboseIter=F), 
@@ -353,6 +355,7 @@ cmensemble
 
 
 Let us check the accuracy of each model in the test set.
+
 ```{r Accuracy}
 # What is the resulting accuracy on the test set?
 # Is it better or worse than each of the individual predictions?
@@ -364,9 +367,11 @@ confusionMatrix(prediction4, as.factor(testing$classe))$overall[1]
 confusionMatrix(predictionComb, as.factor(testing$classe))$overall[1]
 ```
 
-We can see from the results above that the combined method has much less error. 
+We can see from the results above that the combined method has much less error than the individual models. However, random forest is still the best performing model among all of them. 
 
+We choose random forest model as the most appropriate model for this data.
 
+Now let's apply the prediction to validation set.
 ```{r ValidationPred}
 # Prediction on validation data set
 pred1v = predict(modelFit1, validation);
@@ -380,6 +385,7 @@ predvdf = data.frame(prediction1 = pred1v, prediction2 = pred2v,
 combpredv = predict(modelComb,predvdf)
 ```
 
+Evaluation:
 
 ```{r EvaluationPred}
 # Evaluate on Validation
@@ -399,6 +405,8 @@ oos_error <- 1 - accuracy #out of sample error
 data.frame(accuracy = accuracy, oos_error = oos_error, row.names = models)
 ```
 
+We can see from the table above, Tree has the highest out of sample error followed by SVM and Ensemble. The best model in terms of accuracy and OOS error is random forest followed by GBM .
+
 
 ```{r modelPlots}
 # plotting the models
@@ -406,11 +414,14 @@ data.frame(accuracy = accuracy, oos_error = oos_error, row.names = models)
 library(ggplot2)
 par(mfrow=c(1,1))
 ggplot(modelFit1) + theme_bw()
-plot(modelFit2)
 ggplot(modelFit3) + theme_bw()
 
 ```
 
+A simple plot between Complexity Parameter vs Accuracy (Cross-Validation) for decision tree model is shown above. As complexity parameter decreases the accuracy of the validation increases.
+For gradient boosting ,we can see that bootstrapping accuracy of the model increases as the iterations of boosting increases. We can also see that as the tree depth shifts upwards accuracy also increases.
+
+Finally, let us apply the modelFit2 to the new testing set that does not have classe or some new data we haven't yet seen and predict the classe of each observations.
 
 ```{r TestingPred}
 # prediction on testing dataset
